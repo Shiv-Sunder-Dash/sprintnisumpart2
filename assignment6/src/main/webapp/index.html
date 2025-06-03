@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Todo JS (REST, ES6+)</title>
+</head>
+<body>
+<h2>Todo List (ES6+)</h2>
+<input id="taskInput" type="text" placeholder="Enter task" />
+<button id="addBtn">Add</button>
+<ul id="todoList"></ul>
+
+<hr>
+<h3>JavaScript Hoisting Demo</h3>
+<p>
+    Hoisting is JavaScript's default behavior of moving declarations to the top of the current scope.<br>
+    For example:
+</p>
+<pre>
+<span id="hoistCode"></span>
+</pre>
+<p>
+    Output: <span id="hoistOutput"></span>
+</p>
+
+<script type="module">
+    './todo.js';
+    const _id = Symbol('id');
+
+    class Task {
+        constructor(name, completed = false, priority = 'normal') {
+            this[_id] = Task.generateId();
+            this.name = name;
+            this.completed = completed;
+            this.priority = priority;
+        }
+        static generateId = (() => {
+            let id = 0;
+            return () => ++id;
+        })();
+        getId() {
+            return this[_id];
+        }
+    }
+
+    class TodoApp {
+        constructor(apiUrl) {
+            this.apiUrl = apiUrl;
+            this.tasks = [];
+            this.taskMap = new Map(); // Map
+            this.taskSet = new Set(); // Set
+            this.weakTaskMap = new WeakMap(); // WeakMap
+            this.weakTaskSet = new WeakSet(); // WeakSet
+        }
+        fetchTodos = () => {
+            return fetch(this.apiUrl)
+                .then(res => res.json())
+                .then(tasksArr => {
+                    this.tasks = Array.from(tasksArr, t => {
+                        const [name, completed, priority] = t.split('|');
+                        return { name, completed: completed === 'true', priority: priority || 'normal' };
+                    });
+                    this.taskMap.clear();
+                    this.taskSet.clear();
+                    this.tasks.forEach((t, i) => {
+                        const taskObj = Object.assign(new Task(t.name, t.completed, t.priority), t);
+                        this.taskMap.set(taskObj.getId(), taskObj);
+                        this.taskSet.add(taskObj);
+                        this.weakTaskMap.set(taskObj, i);
+                        this.weakTaskSet.add(taskObj);
+                    });
+                    this.render();
+                });
+        };
+        addTask = (name, completed = false, priority = 'normal') => {
+            const task = new Task(name, completed, priority);
+            const taskStr = [task.name, task.completed, task.priority].join('|');
+            return fetch(this.apiUrl, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: taskStr
+            }).then(() => this.fetchTodos());
+        };
+
+        deleteTask = (index) => {
+            return fetch(`${this.apiUrl}/${index}`, {
+                method: "DELETE"
+            }).then(() => this.fetchTodos());
+        };
+        *taskIterator() {
+            for (const task of this.tasks) {
+                yield task;
+            }
+        }
+
+        render = () => {
+            const ul = document.getElementById("todoList");
+            ul.innerHTML = "";
+            let idx = 0;
+            for (const task of this.taskIterator()) {
+                const isHigh = Object.is(priority, 'high');
+                const li = document.createElement("li");
+                li.innerHTML = `
+                    <span style="color:${isHigh ? 'red' : 'black'}">${name} (${priority})</span>
+                    <button data-idx="${idx}" class="delBtn">Delete</button>
+                `;
+                if (completed) li.style.textDecoration = "line-through";
+                ul.appendChild(li);
+                idx++;
+            }
+            for (let btn of document.querySelectorAll('.delBtn')) {
+                btn.onclick = (e) => {
+                    const { idx } = e.target.dataset;
+                    this.deleteTask(idx);
+                };
+            }
+        };
+    }
+    const apiUrl = "http://localhost:8081/assignment5/api/todo";
+    const todoApp = new TodoApp(apiUrl);
+
+    document.getElementById("addBtn").onclick = () => {
+        const input = document.getElementById("taskInput");
+        const [name, priority = 'normal'] = input.value.split(',');
+        if (!name || name.trim() === "") return;
+        todoApp.addTask(name.trim(), false, priority.trim());
+        input.value = "";
+    };
+
+    todoApp.fetchTodos();
+    const hoistDemo = `
+console.log(x); // undefined
+var x = 5;
+console.log(x); // 5
+`;
+    document.getElementById("hoistCode").textContent = hoistDemo;
+    document.getElementById("hoistOutput").textContent = "undefined\n5";
+</script>
+</body>
+</html>
